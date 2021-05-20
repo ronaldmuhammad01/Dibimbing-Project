@@ -1,0 +1,137 @@
+---
+title: "Kaggle"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+```{r}
+
+```
+
+
+
+#Import Data
+```{r}
+Covid_Tweet <-read.csv("C:/Users/Ronald Muhammad/Downloads/covidvaccine.csv")
+
+head(Covid_Tweet)
+
+Covid_Tweet$date <- as.Date(Covid_Tweet$date, format = "%Y-%m-%d")
+
+unique(Covid_Tweet$date)
+
+Covid_tweet_L3M <- Covid_Tweet %>% filter(date > "2021-04-01")
+
+head(Covid_tweet_L3M)
+```
+#library
+```{r}
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+library("syuzhet")
+library("ggplot2")
+library("tidyverse")
+
+
+#Load data as a corpus
+Text_CovidTweet <- Corpus(VectorSource(Covid_tweet_L3M$hashtags))
+```
+
+
+```{r}
+#Replacing "/", "@" and "|" with space
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+Text_CovidTweet <- tm_map(Text_CovidTweet, toSpace, "/")
+Text_CovidTweet <- tm_map(Text_CovidTweet, toSpace, "@")
+Text_CovidTweet <- tm_map(Text_CovidTweet, toSpace, "\\|")
+# Convert the text to lower case
+Text_CovidTweet <- tm_map(Text_CovidTweet, content_transformer(tolower))
+# Remove numbers
+Text_CovidTweet <- tm_map(Text_CovidTweet, removeNumbers)
+# Remove english common stopwords
+Text_CovidTweet <- tm_map(Text_CovidTweet, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your custom stopwords as a character vector
+Text_CovidTweet <- tm_map(Text_CovidTweet, removeWords, c("coronavirus", "moderna", "covidvaccin")) 
+# Remove punctuations
+Text_CovidTweet <- tm_map(Text_CovidTweet, removePunctuation)
+# Eliminate extra white spaces
+Text_CovidTweet <- tm_map(Text_CovidTweet, stripWhitespace)
+# Text stemming - which reduces words to their root form
+Text_CovidTweet <- tm_map(Text_CovidTweet, stemDocument)
+```
+
+```{r}
+
+# Build a term-document matrix
+TextDoc_dtm <- TermDocumentMatrix(Text_CovidTweet)
+dtm_m <- as.matrix(TextDoc_dtm)
+# Sort by descearing value of frequency
+dtm_v <- sort(rowSums(dtm_m),decreasing=TRUE)
+dtm_d <- data.frame(word = names(dtm_v),freq=dtm_v)
+# Display the top 5 most frequent words
+head(dtm_d, 25)
+```
+```{r}
+barplot(dtm_d [1:10,]$freq, las =2, names.arg = dtm_d [1:10,]$word,
+        col = "lightgreen", main = "Top 10 most frequent Hashtag",
+        ylab = "Hashtag Frequencies")
+```
+
+```{r}
+set.seed(123)
+wordcloud(words = dtm_d$word, freq = dtm_d$freq, min.freq = 10, 
+          max.words = 100, random.order = FALSE, rot.per = 0.40,
+          colors = brewer.pal(8, "Dark2"))
+```
+
+```{r}
+# regular sentiment score using get_sentiment() function and method of your choice
+# please note that different methods may have different scales
+syuzhet_vector <- get_sentiment(Covid_tweet_L3M$text, method="syuzhet")
+# see the first row of the vector
+head(syuzhet_vector)
+# see summary statistics of the vector
+summary(syuzhet_vector)
+
+# bing
+bing_vector <- get_sentiment(Covid_tweet_L3M$text, method="bing")
+head(bing_vector)
+summary(bing_vector)
+#affin
+afinn_vector <- get_sentiment(Covid_tweet_L3M, method="afinn")
+head(afinn_vector)
+summary(afinn_vector)
+```
+
+```{r}
+# run nrc sentiment analysis to return data frame with each row classified as one of the following
+# emotions, rather than a score: 
+# anger, anticipation, disgust, fear, joy, sadness, surprise, trust 
+# It also counts the number of positive and negative emotions found in each row
+d<-get_nrc_sentiment(Covid_tweet_L3M$text)
+# head(d,10) - to see top 10 lines of the get_nrc_sentiment dataframe
+head (d,10)
+```
+
+```{r}
+#transpose
+td<-data.frame(t(d))
+#The function rowSums computes column sums across rows for each level of a grouping variable.
+td_new <- data.frame(rowSums(td[2:253]))
+#Transformation and cleaning
+names(td_new)[1] <- "count"
+td_new <- cbind("sentiment" = rownames(td_new), td_new)
+rownames(td_new) <- NULL
+td_new2<-td_new[1:8,]
+#Plot One - count of words associated with each sentiment
+quickplot(sentiment, data=td_new2, weight=count, geom="bar", fill=sentiment, ylab="count")+ggtitle("Survey sentiments")
+
+```
+
